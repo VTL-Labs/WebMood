@@ -1,0 +1,32 @@
+﻿<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stimmung abfragen</title>
+    <link rel="stylesheet" href="../../CSS/style.css">
+</head>
+<body>
+    <div class="card">
+        <h2>Wie ist eure Stimmung heute?</h2>
+
+        <div id="voteButtons">
+            <button onclick="addMood(1)">nicht gut/sehr gestresst</button>
+            <button onclick="addMood(2)">eher wenig motiviert/müde</button>
+            <button onclick="addMood(3)">keine Ahnung/meh/neutral</button>
+            <button onclick="addMood(4)">gut/passt schon</button>
+            <button onclick="addMood(5)">sehr gut/ motiviert</button>
+        </div>
+        <p id="voteMessage" style="display: none;"></p>
+        <button id="withdrawButton" class="secondary" style="display: none;" onclick="withdrawVote()">Stimme zurückziehen</button>
+    </div>
+    <div>
+        <nav class="bottom-nav">
+            <a href="../TEXT/text.html">Text</a>
+            <a href="../HOME.html">Home</a>
+        </nav>
+    </div>
+    <script src="../../JS/script.js"></script>
+</body>
+</html>

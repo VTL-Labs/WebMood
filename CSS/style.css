@@ -1,0 +1,96 @@
+﻿*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 12px 12px 80px 12px;
+}
+
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: #ffffff;
+    display: flex;
+    justify-content: space-around;
+    padding: 10px 0;
+    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
+}
+
+    .bottom-nav a {
+        text-decoration: none;
+        color: #333333;
+        font-weight: bold;
+    }
+
+button {
+    display: block;
+    width: 100%;
+    border: 0;
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 16px;
+    cursor: pointer;
+    background: #5267d8;
+    color: white;
+    margin-top: 12px
+}
+
+    button:disabled {
+        opacity: .5;
+        cursor: default
+    }
+
+    button.secondary {
+        background: #e9edf3;
+        color: #27313b
+    }
+
+.button-link {
+    display: block;
+    width: 100%;
+    border: 0;
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 16px;
+    cursor: pointer;
+    background: #5267d8;
+    color: white;
+    text-decoration: none;
+    text-align: center;
+    margin-top: 12px;
+}
+
+input[type="text"],
+input[type="password"],
+textarea {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 12px;
+    margin-top: 8px;
+    font-family: inherit;
+}
+
+:root {
+    font-family: system-ui,-apple-system,Segoe UI,sans-serif;
+    color: #17202a;
+    background: #f5f7fb
+}
+
+.card {
+    background: white;
+    border-radius: 18px;
+    padding: 22px;
+    margin: 12px auto;
+    max-width: 480px;
+    box-shadow: 0 3px 18px #00000012
+}
+
+h1 {
+    font-size: 26px;
+    margin: 4px 0 8px
+}
