@@ -168,7 +168,7 @@ def clear_text_entries():
 
 # ---------- API: Lehrerbereich ----------
 
-@app.route("/api/reset", methods=["POST"])              
+@app.route("/api/reset", methods=["POST"])
 def reset_round():
     data = request.get_json(force=True)
     if data.get("code") != TEACHER_CODE:
@@ -181,6 +181,17 @@ def reset_round():
     return jsonify({"ok": True})
 
 
+# ---------- Captive Portal: unbekannte Anfragen zur Startseite umleiten ----------
+# Handys prüfen beim WLAN-Beitritt automatisch bestimmte Test-Adressen
+# (z. B. captive.apple.com, connectivitycheck.gstatic.com). Die landen dank
+# der Wildcard-DNS-Konfiguration (siehe Hinweis im Chat) alle bei uns und
+# bekommen hier statt "Seite nicht gefunden" eine Weiterleitung - das lässt
+# iOS/Android/Windows automatisch das Anmelde-Fenster öffnen.
+@app.errorhandler(404)
+def redirect_unknown_to_home(e):
+    return redirect("/HTML/HOME.html")
+
+
 if __name__ == "__main__":
     init_db()
-    app.run(host="0.0.0.0", port=5000, debug=True, threaded=True)
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
