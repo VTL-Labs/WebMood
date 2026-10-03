@@ -1,4 +1,8 @@
-﻿const MOOD_LABELS = {
+﻿const SUPABASE_URL = "https://ujrfewbdgnnfygiwnmpl.supabase.co";
+const SUPABASE_KEY = "sb_publishable_g4cUaTcbdDcseHz92hIK8A_9zpbBeZO";
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const MOOD_LABELS = {
     1: "nicht gut/sehr gestresst",
     2: "eher wenig motiviert/müde",
     3: "keine Ahnung/meh/neutral",
@@ -6,13 +10,33 @@
     5: "sehr gut/motiviert"
 };
 
-const VOTE_COOLDOWN_MS = 10000; // 10 Sekunden zwischen Änderungen
-const TEACHER_CODE = "POET"; // muss mit password.html und TEACHER_CODE in app.py übereinstimmen
+const VOTE_COOLDOWN_MS = 10000; // 10 Sekunden gegen versehentliche Doppelklicks
 
 let cooldownInterval = null;
-let currentMyVote = null; // aus dem Server-Status gecacht, damit wir nicht bei jedem Klick neu fetchen müssen
+let currentRoundId = null;
 
-// ---------- Cooldown (nur clientseitig - verhindert Klick-Spam, keine echte Sicherheitsgrenze) ----------
+// ---------- Aktuelle Runde ermitteln (einmal pro Seitenaufruf gecacht) ----------
+
+async function getCurrentRoundId() {
+    if (currentRoundId !== null) return currentRoundId;
+
+    const { data, error } = await supabase
+        .from("rounds")
+        .select("id")
+        .order("id", { ascending: false })
+        .limit(1)
+        .single();
+
+    if (error) {
+        console.error("Runde konnte nicht geladen werden:", error);
+        return null;
+    }
+
+    currentRoundId = data.id;
+    return currentRoundId;
+}
+
+// ---------- Cooldown (nur clientseitig, verhindert Doppelklicks) ----------
 
 function getRemainingCooldown() {
     const last = Number(localStorage.getItem('lastVoteChangeTime')) || 0;
@@ -23,35 +47,11 @@ function setLastVoteChangeTime() {
     localStorage.setItem('lastVoteChangeTime', Date.now());
 }
 
-// ---------- Abstimmung: läuft jetzt über das Flask-Backend statt localStorage ----------
-
-function showVoteConfirmation(mood) {
-    currentMyVote = mood;
-    const message = document.getElementById("voteMessage");
-    const withdraw = document.getElementById("withdrawButton");
-    if (message) {
-        message.style.display = "block";
-        message.textContent = "Deine Stimme: " + MOOD_LABELS[mood] + " – du kannst jederzeit eine andere Option anklicken oder sie zurückziehen.";
-    }
-    if (withdraw) withdraw.style.display = "inline-block";
-}
-
-function hideVoteConfirmation() {
-    currentMyVote = null;
-    const message = document.getElementById("voteMessage");
-    const withdraw = document.getElementById("withdrawButton");
-    if (message) message.style.display = "none";
-    if (withdraw) withdraw.style.display = "none";
-}
-
 function showCooldownMessage(remainingMs) {
     const message = document.getElementById("voteMessage");
     const buttons = document.querySelectorAll("#voteButtons button");
-    const withdraw = document.getElementById("withdrawButton");
 
     buttons.forEach(btn => btn.disabled = true);
-    if (withdraw) withdraw.disabled = true;
-
     if (cooldownInterval) clearInterval(cooldownInterval);
 
     const update = () => {
@@ -59,18 +59,12 @@ function showCooldownMessage(remainingMs) {
         if (remaining <= 0) {
             clearInterval(cooldownInterval);
             buttons.forEach(btn => btn.disabled = false);
-            if (withdraw) withdraw.disabled = false;
-
-            if (currentMyVote !== null) {
-                showVoteConfirmation(currentMyVote);
-            } else if (message) {
-                message.style.display = "none";
-            }
+            if (message) message.style.display = "none";
             return;
         }
         if (message) {
             message.style.display = "block";
-            message.textContent = "Bitte warte noch " + Math.ceil(remaining / 1000) + " Sekunde(n), bevor du deine Stimme änderst.";
+            message.textContent = "Bitte warte noch " + Math.ceil(remaining / 1000) + " Sekunde(n).";
         }
     };
 
@@ -78,25 +72,40 @@ function showCooldownMessage(remainingMs) {
     cooldownInterval = setInterval(update, 1000);
 }
 
-async function checkVoteStatus() {
-    try {
-        const res = await fetch("/api/status");
-        const data = await res.json();
-        if (data.myVote !== null) {
-            showVoteConfirmation(data.myVote);
-        }
-    } catch (err) {
-        console.error("Status konnte nicht geladen werden:", err);
-    }
+// ---------- Abstimmung: ein Klick, lokale Bestätigung, keine echte Sperre ----------
 
-    const remaining = getRemainingCooldown();
-    if (remaining > 0) {
-        showCooldownMessage(remaining);
+function hasVotedThisSession() {
+    return localStorage.getItem('hasVoted') === 'true';
+}
+
+function markVotedThisSession() {
+    localStorage.setItem('hasVoted', 'true');
+}
+
+function showVoteConfirmation(mood) {
+    const buttons = document.getElementById("voteButtons");
+    const message = document.getElementById("voteMessage");
+    if (buttons) buttons.style.display = "none";
+    if (message) {
+        message.style.display = "block";
+        message.textContent = "Danke! Deine Stimme (" + MOOD_LABELS[mood] + ") wurde gespeichert.";
+    }
+}
+
+async function checkVoteStatus() {
+    if (hasVotedThisSession()) {
+        const buttons = document.getElementById("voteButtons");
+        const message = document.getElementById("voteMessage");
+        if (buttons) buttons.style.display = "none";
+        if (message) {
+            message.style.display = "block";
+            message.textContent = "Du hast in dieser Runde schon abgestimmt. Danke!";
+        }
     }
 }
 
 async function addMood(mood) {
-    if (currentMyVote === mood) return; // schon genau diese Stimme abgegeben
+    if (hasVotedThisSession()) return;
 
     const remaining = getRemainingCooldown();
     if (remaining > 0) {
@@ -104,76 +113,63 @@ async function addMood(mood) {
         return;
     }
 
-    try {
-        const res = await fetch("/api/vote", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mood })
-        });
-        if (!res.ok) throw new Error("Server hat die Stimme abgelehnt");
-
-        setLastVoteChangeTime();
-        showVoteConfirmation(mood);
-    } catch (err) {
-        console.error("Abstimmen fehlgeschlagen:", err);
-        alert("Deine Stimme konnte nicht gespeichert werden. Bist du mit dem Server verbunden?");
-    }
-}
-
-async function withdrawVote() {
-    if (currentMyVote === null) return;
-
-    const remaining = getRemainingCooldown();
-    if (remaining > 0) {
-        showCooldownMessage(remaining);
+    const roundId = await getCurrentRoundId();
+    if (roundId === null) {
+        alert("Verbindung zur Datenbank fehlgeschlagen. Hast du Internet?");
         return;
     }
 
-    try {
-        const res = await fetch("/api/vote", { method: "DELETE" });
-        if (!res.ok) throw new Error("Server hat das Zurückziehen abgelehnt");
-
-        setLastVoteChangeTime();
-        hideVoteConfirmation();
-    } catch (err) {
-        console.error("Zurückziehen fehlgeschlagen:", err);
-        alert("Deine Stimme konnte nicht zurückgezogen werden. Bist du mit dem Server verbunden?");
+    const { error } = await supabase.from("votes").insert({ round_id: roundId, mood: mood });
+    if (error) {
+        console.error("Abstimmen fehlgeschlagen:", error);
+        alert("Deine Stimme konnte nicht gespeichert werden.");
+        return;
     }
+
+    setLastVoteChangeTime();
+    markVotedThisSession();
+    showVoteConfirmation(mood);
 }
 
-// ---------- Lehrerbereich: Durchschnitt & Reset ----------
+// ---------- Lehrerbereich: Durchschnitt ----------
 
 async function showAverageMood() {
     const ergebnisEl = document.getElementById("ergebnis");
     if (!ergebnisEl) return;
 
-    try {
-        const res = await fetch("/api/average");
-        const data = await res.json();
-        ergebnisEl.style.display = "block";
+    const roundId = await getCurrentRoundId();
+    const { data, error } = await supabase
+        .from("votes")
+        .select("mood")
+        .eq("round_id", roundId);
 
-        if (data.counter === 0) {
-            ergebnisEl.textContent = "Nobody voted yet";
-        } else {
-            ergebnisEl.textContent = data.counter + " Stimme(n) abgegeben – Durchschnitt: " + data.average + "/5";
-        }
-    } catch (err) {
-        console.error("Durchschnitt konnte nicht geladen werden:", err);
+    if (error) {
+        console.error("Durchschnitt konnte nicht geladen werden:", error);
+        return;
+    }
+
+    ergebnisEl.style.display = "block";
+    const counter = data.length;
+
+    if (counter === 0) {
+        ergebnisEl.textContent = "Nobody voted yet";
+    } else {
+        const total = data.reduce((sum, row) => sum + row.mood, 0);
+        ergebnisEl.textContent = counter + " Stimme(n) abgegeben – Durchschnitt: " + (total / counter).toFixed(2) + "/5";
     }
 }
 
+// Reset braucht Lehrer-Login (Supabase Auth) - kommt als nächster Schritt.
 async function resetAll() {
-    try {
-        const res = await fetch("/api/reset", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code: TEACHER_CODE })
-        });
-        if (!res.ok) throw new Error("Reset abgelehnt");
-    } catch (err) {
-        console.error("Reset fehlgeschlagen:", err);
-        alert("Zurücksetzen ist fehlgeschlagen.");
+    const { error } = await supabase.from("rounds").insert({});
+    if (error) {
+        console.error("Reset fehlgeschlagen:", error);
+        alert("Zurücksetzen fehlgeschlagen - bist du eingeloggt?");
+        return;
     }
+    currentRoundId = null;
+    await getCurrentRoundId();
+    localStorage.removeItem('hasVoted');
 }
 
 // ---------- Texteinträge ----------
@@ -183,58 +179,64 @@ async function enterTA() {
     const value = textarea.value.trim();
     if (value === "") return;
 
-    try {
-        const res = await fetch("/api/text", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: value })
-        });
-        if (!res.ok) throw new Error("Eintrag wurde abgelehnt");
+    const roundId = await getCurrentRoundId();
+    const { error } = await supabase.from("text_entries").insert({ round_id: roundId, content: value });
 
-        textarea.value = "";
-        textarea.placeholder = "Neuer Eintrag...";
-        renderTextList();
-    } catch (err) {
-        console.error("Text konnte nicht gespeichert werden:", err);
+    if (error) {
+        console.error("Text konnte nicht gespeichert werden:", error);
         alert("Dein Eintrag konnte nicht gespeichert werden.");
+        return;
     }
+
+    textarea.value = "";
+    textarea.placeholder = "Neuer Eintrag...";
+    renderTextList();
 }
 
 async function renderTextList() {
     const liste = document.getElementById("liste");
     if (!liste) return;
 
-    try {
-        const res = await fetch("/api/text");
-        const data = await res.json();
-        liste.innerHTML = "";
+    const roundId = await getCurrentRoundId();
+    const { data, error } = await supabase
+        .from("text_entries")
+        .select("content")
+        .eq("round_id", roundId)
+        .order("id", { ascending: true });
 
-        if (data.entries.length === 0) {
-            const li = document.createElement("li");
-            li.textContent = "Noch keine Einträge.";
-            liste.appendChild(li);
-            return;
-        }
-
-        data.entries.forEach(entry => {
-            const li = document.createElement("li");
-            li.textContent = entry;
-            liste.appendChild(li);
-        });
-    } catch (err) {
-        console.error("Einträge konnten nicht geladen werden:", err);
+    if (error) {
+        console.error("Einträge konnten nicht geladen werden:", error);
+        return;
     }
+
+    liste.innerHTML = "";
+
+    if (!data || data.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Noch keine Einträge.";
+        liste.appendChild(li);
+        return;
+    }
+
+    data.forEach(row => {
+        const li = document.createElement("li");
+        li.textContent = row.content;
+        liste.appendChild(li);
+    });
 }
 
+// Löschen braucht Lehrer-Login (Supabase Auth) - kommt als nächster Schritt.
 async function resetTextEntries() {
-    try {
-        const res = await fetch("/api/text", { method: "DELETE" });
-        if (!res.ok) throw new Error("Löschen abgelehnt");
-        renderTextList();
-    } catch (err) {
-        console.error("Einträge konnten nicht gelöscht werden:", err);
-        alert("Einträge konnten nicht gelöscht werden.");
+    const roundId = await getCurrentRoundId();
+    const { error } = await supabase.from("text_entries").delete().eq("round_id", roundId);
+
+    if (error) {
+        console.error("Einträge konnten nicht gelöscht werden:", error);
+        alert("Löschen fehlgeschlagen - bist du eingeloggt?");
+        return;
     }
+
+    renderTextList();
 }
 
 // ---------- Seiten-Setup ----------
