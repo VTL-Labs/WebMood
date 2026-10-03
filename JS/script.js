@@ -1,6 +1,6 @@
 ﻿const SUPABASE_URL = "https://ujrfewbdgnnfygiwnmpl.supabase.co";
 const SUPABASE_KEY = "sb_publishable_g4cUaTcbdDcseHz92hIK8A_9zpbBeZO";
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const MOOD_LABELS = {
     1: "nicht gut/sehr gestresst",
@@ -20,7 +20,7 @@ let currentRoundId = null;
 async function getCurrentRoundId() {
     if (currentRoundId !== null) return currentRoundId;
 
-    const { data, error } = await supabase
+    const { data, error } = await sb
         .from("rounds")
         .select("id")
         .order("id", { ascending: false })
@@ -119,7 +119,7 @@ async function addMood(mood) {
         return;
     }
 
-    const { error } = await supabase.from("votes").insert({ round_id: roundId, mood: mood });
+    const { error } = await sb.from("votes").insert({ round_id: roundId, mood: mood });
     if (error) {
         console.error("Abstimmen fehlgeschlagen:", error);
         alert("Deine Stimme konnte nicht gespeichert werden.");
@@ -138,7 +138,7 @@ async function showAverageMood() {
     if (!ergebnisEl) return;
 
     const roundId = await getCurrentRoundId();
-    const { data, error } = await supabase
+    const { data, error } = await sb
         .from("votes")
         .select("mood")
         .eq("round_id", roundId);
@@ -161,7 +161,7 @@ async function showAverageMood() {
 
 // Reset braucht Lehrer-Login (Supabase Auth) - kommt als nächster Schritt.
 async function resetAll() {
-    const { error } = await supabase.from("rounds").insert({});
+    const { error } = await sb.from("rounds").insert({});
     if (error) {
         console.error("Reset fehlgeschlagen:", error);
         alert("Zurücksetzen fehlgeschlagen - bist du eingeloggt?");
@@ -180,7 +180,7 @@ async function enterTA() {
     if (value === "") return;
 
     const roundId = await getCurrentRoundId();
-    const { error } = await supabase.from("text_entries").insert({ round_id: roundId, content: value });
+    const { error } = await sb.from("text_entries").insert({ round_id: roundId, content: value });
 
     if (error) {
         console.error("Text konnte nicht gespeichert werden:", error);
@@ -198,7 +198,7 @@ async function renderTextList() {
     if (!liste) return;
 
     const roundId = await getCurrentRoundId();
-    const { data, error } = await supabase
+    const { data, error } = await sb
         .from("text_entries")
         .select("content")
         .eq("round_id", roundId)
@@ -228,7 +228,7 @@ async function renderTextList() {
 // Löschen braucht Lehrer-Login (Supabase Auth) - kommt als nächster Schritt.
 async function resetTextEntries() {
     const roundId = await getCurrentRoundId();
-    const { error } = await supabase.from("text_entries").delete().eq("round_id", roundId);
+    const { error } = await sb.from("text_entries").delete().eq("round_id", roundId);
 
     if (error) {
         console.error("Einträge konnten nicht gelöscht werden:", error);
