@@ -10,7 +10,27 @@ const MOOD_LABELS = {
     5: "sehr gut/motiviert"
 };
 
+const TEACHER_EMAIL = "lehrer@webmood.local"; // fester interner Platzhalter, keine echte Mailbox nötig
+
 const VOTE_COOLDOWN_MS = 10000; // 10 Sekunden gegen versehentliche Doppelklicks
+
+// ---------- Lehrer-Login (password.html) ----------
+
+async function checkPassword() {
+    const password = document.getElementById('passwordInput').value;
+    const errorMessage = document.getElementById('errorMessage');
+
+    const { error } = await sb.auth.signInWithPassword({
+        email: TEACHER_EMAIL,
+        password: password
+    });
+
+    if (error) {
+        errorMessage.style.display = 'block';
+    } else {
+        window.location.href = 'MOOD/overview.html';
+    }
+}
 
 let cooldownInterval = null;
 let currentRoundId = null;
